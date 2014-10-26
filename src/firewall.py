@@ -350,6 +350,32 @@ def ipfw(*args):
         raise Fatal('%r returned %d' % (argv, rv))
 
 
+def pfctl(*args):
+    # TODO: pretty sure this doesn't work. Need to research how pf works.
+    argv = ['pfctl', '-q', ] + list(args)
+    debug1('>> %s\n' % ' '.join(argv))
+    rv = ssubprocess.call(argv)
+    if rv:
+        raise Fatal('%r returned %d' % (argv, rv))
+
+
+def do_pfctl(port, dnsport, family, subnets, udp):
+    # TODO: pf does support IPv6, but for phase one, let's pretend it doesn't
+    if family not in [socket.AF_INET, ]:
+        raise Exception(
+            'Address family "%s" unsupported by pf method'
+            % family_to_string(family))
+    if udp:
+        raise Exception("UDP currently not supported by pf method")
+
+    sport = str(port)
+    xsport = str(port + 1)
+
+    # TODO: add forwarding from sport to subnets
+    # TODO: determine requirements for divertsock? Necessary with pfctl?
+    pass
+
+
 def do_ipfw(port, dnsport, family, subnets, udp):
     # IPv6 not supported
     if family not in [socket.AF_INET, ]:
@@ -539,10 +565,12 @@ def main(port_v6, port_v4, dnsport_v6, dnsport_v4, method, udp, syslog):
     if method == "auto":
         if program_exists('ipfw'):
             method = "ipfw"
+        elif program_exists('pfctl'):
+            method = "pfctl"
         elif program_exists('iptables'):
             method = "nat"
         else:
-            raise Fatal("can't find either ipfw or iptables; check your PATH")
+            raise Fatal("can't find ipfw, pfctl, or iptables; check your PATH")
 
     if method == "nat":
         do_it = do_iptables_nat
@@ -550,6 +578,9 @@ def main(port_v6, port_v4, dnsport_v6, dnsport_v4, method, udp, syslog):
         do_it = do_iptables_tproxy
     elif method == "ipfw":
         do_it = do_ipfw
+    elif method == "pfctl":
+        do_it = do_pfctl
+        pass
     else:
         raise Exception('Unknown method "%s"' % method)
 
